@@ -54,7 +54,7 @@ Installation
 
 ```bash:
   git clone https://github.com/yourusername/zero-width-steganography.git
-  cd zero-width-steganography
+  cd ZeroWidthStego
   # No dependencies required - pure Python 3
 ```
 -----------------------------------------------------------------------
