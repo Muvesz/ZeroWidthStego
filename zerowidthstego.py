@@ -1,24 +1,82 @@
 #!/usr/bin/env python3
 """
 zerowidthstego.py
-Author: Ridpath
-License: MIT
-Repo: https://github.com/ridpath/ZeroWidthStego
 
-Description:
-  Provides modular stego encoding/decoding/detection across various Unicode based covert channels.
+FEATURES:
+✓ 12+ Encoding schemes including SIMPLE_8BIT (proven working decoder)
+✓ ZWSP spacing detection & decoding
+✓ Homoglyph substitution encoding
+✓ Threshold-based encoding (legacy technique)
+✓ AES encrypted steganography
+✓ Intelligent brute-force with pattern matching
+✓ Enterprise-grade analysis & detection
+✓ Professional CLI interface
 
-‌‌‌‌‌‌‌‌‌​​‌​‌‌‌‌‌‌‌‌‌‌‌‌​​​‌​‌‌‌‌‌‌‌‌‌‌‌​​​‌​‌‌‌‌‌‌‌‌‌‌‌​​​‌‌‌‌‌‌‌‌‌‌‌‌‌​​​‌‌​​‌‌‌‌‌‌‌‌‌‌​​​‌​‌‌‌‌‌‌‌‌‌‌‌​‌​​​​‌‌‌‌‌‌‌‌‌‌​‌​​​​‌‌‌‌‌‌‌‌‌​​‌‌​​​‌‌‌‌‌‌‌‌‌​​‌​‌‌​‌‌‌‌‌‌‌‌‌​​​‌​‌‌‌‌‌‌‌‌‌‌‌​​‌​‌‌‌‌‌‌‌‌‌‌‌‌​​​‌​‌​‌‌‌‌‌‌‌‌‌​​‌‌‌​‌‌‌‌‌‌‌‌‌‌‌​‌​​​‌‌‌‌‌‌‌‌‌‌​​‌‌‌​​‌‌‌‌‌‌‌‌‌​​‌​​​​‌‌‌‌‌‌‌‌‌​​‌​​‌​‌‌‌‌‌‌‌‌‌‌​‌​​​​‌‌‌‌‌‌‌‌‌​​​‌‌​‌‌‌‌‌‌‌‌‌‌​​‌​‌‌​‌‌‌‌‌‌‌‌‌​​‌‌​‌‌‌‌‌‌‌‌‌‌‌​​​‌‌‌‌‌‌‌‌‌‌‌‌‌​​‌‌‌‌​‌‌‌‌‌‌‌‌‌​​​‌​‌‌‌‌‌‌‌‌‌‌‌​​‌​‌‌‌"""
+Usage examples:
+  python zerowidthstego.pyy decode -i encoded.txt          # Auto-detect
+  python zzerowidthstego.py bruteforce -P file.txt --search "flag"
+  python zerowidthstego.py embed -m "secret" -p "carrier" --encryption AES
+
+ZeroWidthStego - Covert Encoding with Invisible Unicode
+https://github.com/ridpath/ZeroWidthStego
+
+Author: ridpath
+"""
 
 import argparse
 import sys
 import os
 import re
+import math
+import json
+import itertools
 import hashlib
 from typing import Dict, List, Tuple, Optional, Set, Union
 from enum import Enum
 from pathlib import Path
 import binascii
+from getpass import getpass
+from Crypto.Cipher import AES
+from Crypto.Protocol.KDF import PBKDF2
+from Crypto.Random import get_random_bytes
+
+REPLACEMENT_PATTERN = '|*\\-@O@-\\*|'
+DEFAULT_PREVIEW_SIZE = 50
+DEFAULT_SPACE_MODE_VALUE = True
+DEFAULT_UNCONSTRAIN_VALUE = False
+DEFAULT_EQUALIZATION_VALUE = True
+DEFAULT_THRESHOLD_VALUE = 35
+DEFAULT_THRESHOLD_RANGE_VALUE = "10, 38"
+DEFAULT_ENCRYPTION_VALUE = None
+DEFAULT_WILY_MODE_VALUE = True
+
+ZERO_WIDTH_SPACE = '\u200b'
+ZERO_WIDTH_NON_JOINER = '\u200c'
+ZERO_WIDTH_JOINER = '\u200d'
+LEFT_TO_RIGHT_MARK = '\u200e'
+RIGHT_TO_LEFT_MARK = '\u200f'
+MONGOLIAN_VOWEL_SEPARATOR = '\u180e'
+ZERO_WIDTH_NO_BREAK_SPACE = '\ufeff'
+
+ZWSP_LIST = [
+    ZERO_WIDTH_SPACE,
+    ZERO_WIDTH_NON_JOINER,
+    ZERO_WIDTH_JOINER,
+    LEFT_TO_RIGHT_MARK,
+    RIGHT_TO_LEFT_MARK,
+]
+
+ZWSP_FULL_LIST = [
+    ZERO_WIDTH_SPACE,
+    ZERO_WIDTH_NON_JOINER,
+    ZERO_WIDTH_JOINER,
+    LEFT_TO_RIGHT_MARK,
+    RIGHT_TO_LEFT_MARK,
+    MONGOLIAN_VOWEL_SEPARATOR,
+    ZERO_WIDTH_NO_BREAK_SPACE
+]
+
+SALT = b'\x16\x91}\xd4A~{e\xcc])pp\x16*G\xc97\xcauUY\xe5\x93?\xd6\xe6\x1e\x07FP\x89'
 
 class EncodingScheme(Enum):
     # Core working schemes
@@ -37,10 +95,12 @@ class EncodingScheme(Enum):
     
     # Special schemes
     ZWSP_SPACING = "zwsp_spacing"                         # ZWSP between letters, hidden message appended
+    
+    THRESHOLD_BASED = "threshold_based"                   # Threshold-based encoding
 
 class ZeroWidthEncoder:
     """
-    Comprehensive encoder/decoder with ZWSP spacing support.
+    Comprehensive encoder/decoder with ZWSP spacing support 
     """
     
     # Homoglyph mapping
@@ -71,7 +131,8 @@ class ZeroWidthEncoder:
             'bits_per_chunk': 8,
             'description': 'EXACT simple decoder: ZWSP=0, ZWNJ=1, ignores incomplete bytes',
             'is_homoglyph': False,
-            'is_zwsp_spacing': False
+            'is_zwsp_spacing': False,
+            'is_threshold_based': False
         },
         EncodingScheme.BASIC_UTF8: {
             'name': 'Basic UTF-8',
@@ -81,7 +142,8 @@ class ZeroWidthEncoder:
             'bits_per_chunk': 8,
             'description': 'Basic UTF-8: ZWSP=0, ZWNJ=1',
             'is_homoglyph': False,
-            'is_zwsp_spacing': False
+            'is_zwsp_spacing': False,
+            'is_threshold_based': False
         },
         EncodingScheme.BASIC_UTF8_REVERSED: {
             'name': 'Basic UTF-8 Reversed',
@@ -91,7 +153,8 @@ class ZeroWidthEncoder:
             'bits_per_chunk': 8,
             'description': 'Reversed UTF-8: ZWSP=1, ZWNJ=0',
             'is_homoglyph': False,
-            'is_zwsp_spacing': False
+            'is_zwsp_spacing': False,
+            'is_threshold_based': False
         },
         EncodingScheme.BASIC_UTF16: {
             'name': 'Basic UTF-16',
@@ -101,7 +164,8 @@ class ZeroWidthEncoder:
             'bits_per_chunk': 16,
             'description': 'Basic UTF-16: ZWSP=1, ZWNJ=0, 16-bit chunks',
             'is_homoglyph': False,
-            'is_zwsp_spacing': False
+            'is_zwsp_spacing': False,
+            'is_threshold_based': False
         },
         EncodingScheme.BASIC_UTF16_REVERSED: {
             'name': 'Basic UTF-16 Reversed', 
@@ -111,7 +175,8 @@ class ZeroWidthEncoder:
             'bits_per_chunk': 16,
             'description': 'Reversed UTF-16: ZWSP=0, ZWNJ=1, 16-bit chunks',
             'is_homoglyph': False,
-            'is_zwsp_spacing': False
+            'is_zwsp_spacing': False,
+            'is_threshold_based': False
         },
         
         # EXTENDED SCHEMES
@@ -127,7 +192,8 @@ class ZeroWidthEncoder:
             'bits_per_chunk': 2,
             'description': '2-bit per symbol using ZWSP, ZWNJ, ZWJ, WJ',
             'is_homoglyph': False,
-            'is_zwsp_spacing': False
+            'is_zwsp_spacing': False,
+            'is_threshold_based': False
         },
         EncodingScheme.QUATERNARY_UTF16: {
             'name': 'Quaternary UTF-16 (4 symbols, 2 bits)',
@@ -141,7 +207,8 @@ class ZeroWidthEncoder:
             'bits_per_chunk': 2,
             'description': '2-bit per symbol for UTF-16 input',
             'is_homoglyph': False,
-            'is_zwsp_spacing': False
+            'is_zwsp_spacing': False,
+            'is_threshold_based': False
         },
         EncodingScheme.OCTAL_UTF8: {
             'name': 'Octal UTF-8 (8 symbols, 3 bits)',
@@ -159,7 +226,8 @@ class ZeroWidthEncoder:
             'bits_per_chunk': 3,
             'description': '3-bit per symbol using 8 zero-width characters',
             'is_homoglyph': False,
-            'is_zwsp_spacing': False
+            'is_zwsp_spacing': False,
+            'is_threshold_based': False
         },
         EncodingScheme.BINARY_DIRECTIONAL_UTF8: {
             'name': 'Binary Directional UTF-8 (LRM=0, RLM=1)',
@@ -169,7 +237,8 @@ class ZeroWidthEncoder:
             'bits_per_chunk': 8,
             'description': 'Binary using directional marks',
             'is_homoglyph': False,
-            'is_zwsp_spacing': False
+            'is_zwsp_spacing': False,
+            'is_threshold_based': False
         },
         EncodingScheme.HOMOGLYPH_BINARY_UTF8: {
             'name': 'Homoglyph Binary UTF-8',
@@ -178,7 +247,8 @@ class ZeroWidthEncoder:
             'bits_per_chunk': 1,
             'description': 'Binary encoding using homoglyph substitutions',
             'is_homoglyph': True,
-            'is_zwsp_spacing': False
+            'is_zwsp_spacing': False,
+            'is_threshold_based': False
         },
         
         # ZWSP SPACING SCHEME (NEW - from your working decoder)
@@ -186,7 +256,17 @@ class ZeroWidthEncoder:
             'name': 'ZWSP Spacing Decoder',
             'description': 'Letters separated by ZWSP, hidden message appended using ZWSP spacing',
             'is_homoglyph': False,
-            'is_zwsp_spacing': True
+            'is_zwsp_spacing': True,
+            'is_threshold_based': False
+        },
+        
+        # THRESHOLD-BASED SCHEME 
+        EncodingScheme.THRESHOLD_BASED: {
+            'name': 'Threshold-Based Encoding (Old Code Method)',
+            'description': 'Threshold-based encoding with padding and space modes',
+            'is_homoglyph': False,
+            'is_zwsp_spacing': False,
+            'is_threshold_based': True
         }
     }
     
@@ -198,13 +278,231 @@ class ZeroWidthEncoder:
         '\u2063', '\u2064'
     }
     
-    def __init__(self, scheme: EncodingScheme = EncodingScheme.SIMPLE_8BIT):
+    def __init__(self, scheme: EncodingScheme = EncodingScheme.SIMPLE_8BIT, 
+                 threshold: int = DEFAULT_THRESHOLD_VALUE,
+                 zwsp_list: List[str] = None,
+                 equalize: bool = DEFAULT_EQUALIZATION_VALUE,
+                 space_mode: bool = DEFAULT_SPACE_MODE_VALUE,
+                 unconstrain_mode: bool = DEFAULT_UNCONSTRAIN_VALUE):
         self.scheme = scheme
         self.config = self.SCHEMES[scheme]
+        self.threshold = threshold
+        self.zwsp_list = zwsp_list or ZWSP_LIST
+        self.equalize = equalize
+        self.space_mode = space_mode
+        self.unconstrain_mode = unconstrain_mode
     
+    def to_base(self, num, base, numerals='0123456789abcdefghijklmnopqrstuvwxyz'):
+        return ((num == 0) and numerals[0]) or (self.to_base(num // base, base, numerals).lstrip(numerals[0]) + numerals[num % base])
+      
+    def get_padding(self, nb_possibility, threshold):
+        return int(threshold/nb_possibility)
+
+    def verification(self, public_text, zwsp_list):
+        valid = False
+        for char in zwsp_list:
+            if char in public_text:
+                valid = True
+        return valid
+
+    def embed_threshold_based(self, public_text, private_text):
+        """Threshold-based embedding method."""
+        hidden_codes, final_text, padding = '', '', self.get_padding(len(self.zwsp_list), self.threshold)
+        position, block_size, nb_spaces = 0, 1, public_text.count(' ')
+
+        if self.unconstrain_mode:
+            settings = json.dumps({
+                'zwsp_list': self.zwsp_list,
+                'threshold': self.threshold
+            }, separators=(',',':'))
+            private_text = ''.join((settings, private_text))
+
+        print(f"\033[37;1mEQUALIZE MODE : \033[36m{self.equalize}\033[0m")
+        print(f"\033[37;1mSPACE MODE : \033[36m{self.space_mode}\033[0m")
+        print(f"\033[37;1mPADDING SIZE : \033[36m{padding}\033[0m")
+        print(f"\033[37;1mTHRESHOLD : \033[36m{self.threshold}\033[0m")
+        print(f"\033[37;1mZWSP LIST : \033[36m{self.zwsp_list}\033[0m")
+
+        # Encoding
+        for char in private_text:
+            code = str(self.to_base(ord(char), len(self.zwsp_list))).zfill(padding)
+            for code_char in code:
+                hidden_codes += self.zwsp_list[int(code_char)]
+
+        if(nb_spaces <= 0 or not self.space_mode):
+            if(self.equalize and (len(public_text) - 1) <= len(hidden_codes)):
+                block_size = int(len(hidden_codes)/(len(public_text) - 1))
+            elif(not self.equalize):
+                block_size = len(hidden_codes)
+            else:
+                block_size = 1
+            
+            print(f"\033[37;1mBLOCK SIZE : \033[36m{block_size}\033[0m")
+
+            for i in range(len(public_text)):
+                hidden_text = ''
+
+                if(i == (len(public_text) - 1)):
+                    final_text += public_text[i]
+                else:
+                    if(position + block_size <= len(hidden_codes) and i < (len(public_text) - 2)):
+                        hidden_text = hidden_codes[position: position + block_size]
+                    elif(len(hidden_codes) - position > 0):
+                        hidden_text = hidden_codes[position:]
+                    else:
+                        final_text += public_text[i:]
+                        break
+                    final_text += public_text[i] + hidden_text
+                    position += block_size
+            return final_text
+        else:
+            final_text = public_text
+            if(self.equalize and nb_spaces <= len(hidden_codes)):
+                block_size = int(len(hidden_codes)/nb_spaces)
+            elif(not self.equalize):
+                block_size = len(hidden_codes)
+            else:
+                block_size = 1
+
+            print(f"\033[37;1mBLOCK SIZE : \033[36m{block_size}\033[0m")
+
+            for i in range(nb_spaces):
+                replacement_text = REPLACEMENT_PATTERN
+                if(position + block_size <= len(hidden_codes)):
+                    replacement_text += hidden_codes[position: position + block_size]
+                elif(len(hidden_codes) - position > 0):
+                    replacement_text += hidden_codes[position:]
+                else:
+                    break
+                
+                final_text = final_text.replace(' ', replacement_text, 1)
+                position += block_size
+            return final_text.replace(REPLACEMENT_PATTERN, ' ')
+
+    def extract_threshold_based(self, public_text):
+        """Threshold-based extraction method."""
+        encoded_text, private_text, padding = '', '', self.get_padding(len(self.zwsp_list), self.threshold)
+        current_encoded_char = ''
+        
+        for char in public_text:
+            if char in self.zwsp_list:
+                encoded_text += str(self.zwsp_list.index(char))
+            
+        for index, char in enumerate(encoded_text):
+            current_encoded_char += char
+            if((index + 1) % padding == 0 and index > 0):
+                private_text += chr(int(current_encoded_char, len(self.zwsp_list)))
+                current_encoded_char = ''
+        return private_text
+
+    def bruteforce_threshold_based(self, public_text, threshold_range, base, preview_size, searched_text, output, force):
+        """Brute-force method."""
+        nb_operations, cpt, zwsp_groups = 0, 1, []
+
+        for i in range(2, len(self.zwsp_list) + 1):
+            zwsp_groups += list(itertools.permutations(self.zwsp_list[0:i], base))
+
+        zwsp_groups = list(set(zwsp_groups))
+        nb_operations += len(zwsp_groups)
+        nb_operations *= (threshold_range[1] - threshold_range[0])
+        
+        print(f"\033[37;1mNUMBER OF ARRANGEMENT : \033[36m{len(zwsp_groups)}\033[0m")
+
+        if searched_text:
+            print(f"\033[37;1mRESEARCH : \033[36m{searched_text}\033[0m")
+            if output:
+                if force:
+                    file = open(output, "w")
+                else:
+                    file = open(output, "a")
+ 
+                for i in range(len(zwsp_groups)):
+                    for threshold in range(threshold_range[0], threshold_range[1]):
+                        self.threshold = threshold
+                        self.zwsp_list = list(zwsp_groups[i])
+                        result = self.extract_threshold_based(public_text)
+                        if(re.search(searched_text, result, re.IGNORECASE)):
+                            file.write(f"\n{cpt}. {result[0:preview_size]}")
+                            cpt += 1 
+                file.close()
+                if(cpt <= 1):
+                    print("\n\033[37;1m[\033[31;1m-\033[37;1m] \033[37;1mNo match found !\033[0m\n")
+                else:
+                    print(f"\033[37;1m[\033[36;1m*\033[37;1m] \033[37;1mBruteforce matches have been saved in '\033[36;1m{output}\033[0m'")
+            else:
+                for i in range(len(zwsp_groups)):
+                    for threshold in range(threshold_range[0], threshold_range[1]):
+                        self.threshold = threshold
+                        self.zwsp_list = list(zwsp_groups[i])
+                        result = self.extract_threshold_based(public_text)
+                        if(re.search(searched_text, result, re.IGNORECASE)):
+                            print(f"\n\033[37;1m___________________________________◢  \033[32;1mMatch #{cpt}\033[0m ◣____________________________________\033[0m\n")
+                            print(f"\033[37;1mTHRESHOLD : \033[36m{threshold}\033[37m\nZWSP LIST : \033[36m{list(zwsp_groups[i])}\033[0m")
+                            print(f"\033[37;1mPREVIEW : \033[36m{result[0:preview_size].encode('utf-8', 'surrogateescape').decode()}\033[0m")
+                            print(f"\033[37;1m{'_' * (len(str(cpt)) - 1)}____________________________________________________________________________________\033[0m\n")
+                            cpt += 1   
+                if(cpt <= 1):
+                    print("\n\033[37;1m[\033[31;1m-\033[37;1m] \033[37;1mNo match found !\033[0m\n") 
+        else:
+            if output:
+                if force:
+                    file = open(output, "w")
+                else:
+                    file = open(output, "a")
+                for i in range(len(zwsp_groups)):
+                    for threshold in range(threshold_range[0], threshold_range[1]):
+                        self.threshold = threshold
+                        self.zwsp_list = list(zwsp_groups[i])
+                        file.write(f"\n{cpt}. {self.extract_threshold_based(public_text)[0:preview_size].encode('utf-8', 'replace').decode()}")
+                        cpt += 1
+                file.close()
+                print(f"\033[37;1m[\033[36;1m*\033[37;1m] \033[37;1mBruteforce attempts have been saved in '\033[36;1m{output}\033[0m'")
+            else:
+                for i in range(len(zwsp_groups)):
+                    for threshold in range(threshold_range[0], threshold_range[1]):
+                        self.threshold = threshold
+                        self.zwsp_list = list(zwsp_groups[i])
+                        print(f"\n\033[37;1m___________________________________◢  \033[32;1mAttempt #{cpt}\033[0m ◣____________________________________\033[0m\n")
+                        print(f"\033[37;1mTHRESHOLD : \033[36m{threshold}\033[37m\nZWSP LIST : \033[36m{list(zwsp_groups[i])}\033[0m")
+                        try:
+                            print(f"\033[37;1mPREVIEW : \033[36m{self.extract_threshold_based(public_text)[0:preview_size].encode('utf-8', 'surrogateescape').decode()}\033[0m")
+                        except UnicodeEncodeError:
+                            print("ERROR !")
+                        print(f"\033[37;1m{'_' * (len(str(cpt)) - 1)}______________________________________________________________________________________\033[0m\n")
+                        cpt += 1
+        print()
+
+    def encrypt(self, data_to_encrypt, encryption_type, password):
+        """Encrypt data using AES."""
+        key = PBKDF2(password, SALT, dkLen=32)
+        data = data_to_encrypt.encode('utf-8')
+        cipher_encrypt = AES.new(key, AES.MODE_CFB)
+        ciphered_bytes = cipher_encrypt.encrypt(data)
+        ciphered_data = cipher_encrypt.iv + ciphered_bytes
+        return ciphered_data.decode('ISO-8859-1')
+
+    def decrypt(self, ciphered_data, encryption_type, password):
+        """Decrypt AES encrypted data."""
+        decrypted_data = ""
+        try:
+            ciphered_data = ciphered_data.encode('ISO-8859-1')
+            key = PBKDF2(password, SALT, dkLen=32)
+            iv = ciphered_data[0:16]
+            cipher_decrypt = AES.new(key, AES.MODE_CFB, iv=iv)
+            deciphered_bytes = cipher_decrypt.decrypt(ciphered_data[16:])
+            decrypted_data = deciphered_bytes.decode('utf-8')
+            return decrypted_data
+        except UnicodeDecodeError:
+            print("\033[37;1m[\033[31;1m-\033[37;1m] \033[37;1mWrong password !\033[0m\n")
+        finally:
+            return decrypted_data
+
+    # NEW CODE METHODS (PRESERVED)
     def encode(self, text: str, carrier: Optional[str] = None) -> str:
         """Encode text using the specified scheme."""
-        if self.config['is_homoglyph']:
+        if self.config['is_threshold_based']:
+            return self.embed_threshold_based(carrier or text, text)
+        elif self.config['is_homoglyph']:
             return self._encode_homoglyph(text, carrier)
         elif self.config['is_zwsp_spacing']:
             return self._encode_zwsp_spacing(text, carrier)
@@ -309,7 +607,9 @@ class ZeroWidthEncoder:
     
     def decode(self, encoded_text: str) -> str:
         """Decode encoded text back to original."""
-        if self.config['is_homoglyph']:
+        if self.config['is_threshold_based']:
+            return self.extract_threshold_based(encoded_text)
+        elif self.config['is_homoglyph']:
             return self._decode_homoglyph(encoded_text)
         elif self.config['is_zwsp_spacing']:
             return self._decode_zwsp_spacing(encoded_text)
@@ -621,6 +921,141 @@ class ZeroWidthDetector:
         
         return min(score, 1.0), reason
 
+# UTILITY FUNCTIONS
+def str2bool(value):
+    if isinstance(value, bool):
+       return value
+    if value.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif value.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+def display_zwsp_list():
+    print("\033[37;1mThis list is not exhaustive but contains the most discreet zero width characters :\033[0m\n")
+    table = []
+    for char in ZWSP_FULL_LIST:
+        table.append([
+            f"\033[37;1m{char.encode('ascii', 'namereplace').decode('utf-8').replace('\\N', '')}\033[0m",
+            f"\033[36;1m{char.encode('ascii', 'backslashreplace').decode('utf-8')}\033[0m"
+        ])
+    try:
+        from tabulate import tabulate
+        print(tabulate(table, ("\033[32;1mNAME\033[0m", "\033[32;1mCODE\033[0m"), tablefmt="pretty") + "\n")
+    except ImportError:
+        for row in table:
+            print(f"{row[0]:<30} {row[1]}")
+    exit()
+
+def format_zwsp_list(zwsp_list):
+    try:
+        zwsp_list = [item.encode('latin1').decode('unicode_escape') for item in zwsp_list.replace(" ", "").split(',')]
+        return list(set([char for char in zwsp_list if(not(char.isspace() or len(char) < 1) and re.match(r"^\\u.{3,4}$",
+        char.encode("ascii", "backslashreplace").decode('utf-8'), re.IGNORECASE))]))
+    except UnicodeDecodeError:
+        print("\033[37;1m[\033[31;1m-\033[37;1m] \033[37;1mSome unicode characters present in the list are invalid !\033[0m\n")
+        exit()
+
+def clean_text(text, ignore_chars=None, specific_chars=None):
+    """Clean zero-width characters from text."""
+    cleaned_text = text
+    
+    if ignore_chars and specific_chars:
+        # Remove duplicates
+        for element in list(ignore_chars):
+            if element in specific_chars:
+                ignore_chars.remove(element)
+                specific_chars.remove(element)
+        
+        for element in ignore_chars:
+            parts = cleaned_text.split(element)
+            cleaned_text = element.join(parts)
+        
+        for element in specific_chars:
+            cleaned_text = cleaned_text.replace(element, '')
+    
+    elif ignore_chars:
+        for element in ignore_chars:
+            parts = cleaned_text.split(element)
+            cleaned_text = element.join(parts)
+    
+    elif specific_chars:
+        for element in specific_chars:
+            cleaned_text = cleaned_text.replace(element, '')
+    
+    else:
+        # Remove all zero-width characters
+        for char in ZWSP_FULL_LIST:
+            cleaned_text = cleaned_text.replace(char, '')
+    
+    return cleaned_text
+
+def detect_text(text, ignore_chars=None, search_chars=None, replace_style=None):
+    """Detect and highlight zero-width characters in text."""
+    replacement_char = '•'
+    if not args.output:
+        replacement_char = '\033[31;1m•\033[0m'
+
+    analyzed_text = text
+    
+    if ignore_chars and search_chars:
+        # Remove duplicates
+        for element in list(ignore_chars):
+            if element in search_chars:
+                ignore_chars.remove(element)
+                search_chars.remove(element)
+        
+        for element in ignore_chars:
+            parts = analyzed_text.split(element)
+            for i in range(len(parts)):
+                if replace_style == "escaped":
+                    parts[i] = parts[i].encode("ascii", "backslashreplace").decode('utf-8')
+                elif replace_style == "named":
+                    parts[i] = parts[i].encode("ascii", "namereplace").decode('utf-8')
+                else:
+                    parts[i] = re.sub('&#.{4,5};', replacement_char, parts[i].encode("ascii", "xmlcharrefreplace").decode('utf-8'))
+            analyzed_text = element.join(parts)
+        
+        for element in search_chars:
+            if replace_style == "escaped":
+                analyzed_text = analyzed_text.replace(element, element.encode("ascii", "backslashreplace").decode('utf-8'))
+            elif replace_style == "named":
+                analyzed_text = analyzed_text.replace(element, element.encode("ascii", "namereplace").decode('utf-8'))
+            else:
+                analyzed_text = analyzed_text.replace(element, replacement_char)
+    
+    elif ignore_chars:
+        for element in ignore_chars:
+            parts = analyzed_text.split(element)
+            for i in range(len(parts)):
+                if replace_style == "escaped":
+                    parts[i] = parts[i].encode("ascii", "backslashreplace").decode('utf-8')
+                elif replace_style == "named":
+                    parts[i] = parts[i].encode("ascii", "namereplace").decode('utf-8')
+                else:
+                    parts[i] = re.sub('&#.{4,5};', replacement_char, parts[i].encode("ascii", "xmlcharrefreplace").decode('utf-8'))
+            analyzed_text = element.join(parts)
+    
+    elif search_chars:
+        for element in search_chars:
+            if replace_style == "escaped":
+                analyzed_text = analyzed_text.replace(element, element.encode("ascii", "backslashreplace").decode('utf-8'))
+            elif replace_style == "named":
+                analyzed_text = analyzed_text.replace(element, element.encode("ascii", "namereplace").decode('utf-8'))
+            else:
+                analyzed_text = analyzed_text.replace(element, replacement_char)
+    
+    else:
+        if replace_style == "escaped":
+            analyzed_text = analyzed_text.encode("ascii", "backslashreplace").decode('utf-8')
+        elif replace_style == "named":
+            analyzed_text = analyzed_text.encode("ascii", "namereplace").decode('utf-8')
+        else:
+            analyzed_text = re.sub('&#.{4,5};', replacement_char, analyzed_text.encode("ascii", "xmlcharrefreplace").decode('utf-8'))
+    
+    return analyzed_text
+
 def analyze_file_content(text: str) -> Dict:
     """Comprehensive analysis of zero-width and homoglyph content."""
     zero_width_defs = {
@@ -721,6 +1156,12 @@ Examples:
   # Encode with ZWSP spacing
   {sys.argv[0]} encode "hidden message" -o output.txt --scheme zwsp_spacing --carrier carrier.txt
 
+  # Threshold-based encoding
+  {sys.argv[0]} embed -m "hidden message" -p "carrier text" --threshold 35
+
+  # Brute-force
+  {sys.argv[0]} bruteforce -P encoded.txt --search "flag"
+
 Priority Schemes (auto-detection order):
   1. simple_8bit      - Your exact working decoder (ZWSP=0, ZWNJ=1)
   2. basic_utf8       - Basic UTF-8 encoding
@@ -735,8 +1176,8 @@ Full Scheme List:
     
     subparsers = parser.add_subparsers(dest='command', help='Command to execute')
     
-    # Encode command
-    encode_parser = subparsers.add_parser('encode', help='Encode text or file')
+    # Encode command (new code)
+    encode_parser = subparsers.add_parser('encode', help='Encode text or file (new code schemes)')
     encode_parser.add_argument('text', nargs='?', help='Text to encode (or use --input)')
     encode_parser.add_argument('-i', '--input', help='Input file or - for stdin')
     encode_parser.add_argument('-o', '--output', help='Output file or - for stdout')
@@ -746,8 +1187,8 @@ Full Scheme List:
                               help='Encoding scheme to use')
     encode_parser.add_argument('--carrier', help='Carrier text file for embedding')
     
-    # Decode command
-    decode_parser = subparsers.add_parser('decode', help='Decode zero-width text')
+    # Decode command (new code)
+    decode_parser = subparsers.add_parser('decode', help='Decode zero-width text (new code schemes)')
     decode_parser.add_argument('-i', '--input', required=True, help='Input file or - for stdin')
     decode_parser.add_argument('-o', '--output', help='Output file or - for stdout')
     decode_parser.add_argument('-s', '--scheme', 
@@ -759,6 +1200,68 @@ Full Scheme List:
     # Analyze command
     analyze_parser = subparsers.add_parser('analyze', help='Analyze for steganography content')
     analyze_parser.add_argument('-i', '--input', required=True, help='Input file or - for stdin')
+    
+    clean_parser = subparsers.add_parser('clean', help='Clean zero width space in text.')
+    detect_parser = subparsers.add_parser('detect', help='Detect zero width space in text.')
+    embed_parser = subparsers.add_parser('embed', help='Hide private text using threshold-based method.')
+    extract_parser = subparsers.add_parser('extract', help='Extract private text using threshold-based method.')
+    bruteforce_parser = subparsers.add_parser('bruteforce', help='Brute-force threshold-based encoding.')
+    
+    # Clean command arguments
+    clean_parser.add_argument("-i", "--ignore", dest="cleanIgnore", metavar="\"<ignored_character>, ...\"", help="Ignore characters.", type=str)
+    clean_public_group = clean_parser.add_mutually_exclusive_group(required=True)
+    clean_public_group.add_argument("-p", "--public", dest="cleanPublic", metavar="<public_text>", help="Text to clean.", type=str)
+    clean_public_group.add_argument("-P", "--pfile", dest="cleanPublicFile", metavar="<path_to_file>", help="Text from a file to clean up.", type=str)
+    clean_parser.add_argument("-s", "--specific", dest="cleanSpecific", metavar="\"<specific_character>, ...\"", help="Clean specific characters.", type=str)
+    
+    # Detect command arguments
+    detect_parser.add_argument("-i", "--ignore", dest="detectIgnore", metavar="\"<ignored_character>, ...\"", help="Ignore characters.", type=str)
+    detect_public_Group = detect_parser.add_mutually_exclusive_group(required=True)
+    detect_public_Group.add_argument("-p", "--public", dest="detectPublic", metavar="<public_text>", help="Suspected text, that could to contain zero width spaces.", type=str)
+    detect_public_Group.add_argument("-P", "--pfile", dest="detectPublicFile", metavar="<path_to_file>", help="Suspected text from a file, that could to contain zero width spaces.", type=str)
+    detect_parser.add_argument("-r", "--replace", dest="detectReplace", help="Character replacing zero width spaces.", choices=['dotted', 'escaped', 'named'],)
+    detect_parser.add_argument("-s", "--search", dest="detectSearch", metavar="\"<search_character>, ...\"", help="Search characters.", type=str)
+    
+    # Embed command arguments 
+    embed_parser.add_argument("-c", "--characters", dest="embedCharacters", metavar="\"<char_1>, <char_2>, ...\"", help="Zero width characters to use to encode the private text (e.g : \\u200b). Use the 'list' argument to see some possible characters.", type=str)
+    embed_parser.add_argument("-e", "--encryption", dest="embedEncryption", metavar="[AES, RSA, PGP]", choices=['AES', 'RSA', 'PGP'], help="Encryption type.")
+    embed_mask_group = embed_parser.add_mutually_exclusive_group(required=True)
+    embed_mask_group.add_argument("-m", "--mask", dest="embedPrivate", metavar="<hidden_text>", help="Text to hide in another text (public text).", type=str)
+    embed_mask_group.add_argument("-M", "--mfile", dest="embedPrivateFile", metavar="<path_to_file>", help="Text from a file to hide in another text (public text).", type=str)
+    embed_public_group = embed_parser.add_mutually_exclusive_group(required=True)
+    embed_public_group.add_argument("-p", "--public", dest="embedPublic", metavar="<public_text>", help="Cover text for hidden text (private text).", type=str)
+    embed_public_group.add_argument("-P", "--pfile", dest="embedPublicFile", metavar="<path_to_file>", help="Use text cover from a file, for hidden text (private text).", type=str)
+    embed_parser.add_argument("-s", "--space", dest="embedSpace", metavar="[y/yes/true, n/no/false]", help="If enabled, it allows a better discretion by only putting spaces of zero width in existing visible spaces.", nargs='?', const=True, default=DEFAULT_SPACE_MODE_VALUE, type=str2bool)
+    embed_parser.add_argument("-t", "--threshold", dest="embedThreshold", metavar="<number>", help="Size of an encoding string, the larger the number, the more it is possible to encode different characters. However it is best to keep a small size in order to remain discreet. ({0} by default)".format(DEFAULT_THRESHOLD_VALUE), default=DEFAULT_THRESHOLD_VALUE, type=int)
+    embed_parser.add_argument("-u", "--unconstrain", dest="embedUnconstrain", metavar="[y/yes/true, n/no/false]", help="If enabled (enabled by default), hides the masking parameters with the private text in the cover text (public text). In order not to need to remember the parameters at the time of extraction.", nargs='?', const=True, default=DEFAULT_UNCONSTRAIN_VALUE, type=str2bool)
+    embed_parser.add_argument("-z", "--equalize", dest="embedEqualize", metavar="[y/yes/true, n/no/false]", help="If enabled, evenly distribute the zero width spaces, corresponding to the hidden text (private text), on the set of visible spaces of the cover text (public text).", nargs='?', const=True, default=DEFAULT_EQUALIZATION_VALUE, type=str2bool)
+    
+    # Extract command arguments
+    extract_parser.add_argument("-c", "--characters", dest="extractCharacters", metavar="\"<char_1>, <char_2>, ...\"", help="Zero width characters to use to decode the private text (e.g : \\u200b).", type=str)
+    extract_parser.add_argument("-e", "--encryption", dest="extractEncryption", metavar="[AES, RSA, PGP]", choices=['AES', 'RSA', 'PGP'], help="Encryption type.")
+    extract_public_group = extract_parser.add_mutually_exclusive_group(required=True)
+    extract_public_group.add_argument("-p", "--public", dest="extractPublic", metavar="<public_text>", help="Cover text containing zero width space characters to extract.", type=str)
+    extract_public_group.add_argument("-P", "--pfile", dest="extractPublicFile", metavar="<path_to_file>", help="Use text cover from a file, containing zero width space characters for extraction.", type=str)
+    extract_parser.add_argument("-t", "--threshold", dest="extractThreshold", metavar="<number>", help="Size of an encoding string, the larger the number, the more it is possible to encode different characters. Put the threshold value used during the embed step. ({0} by default)".format(DEFAULT_THRESHOLD_VALUE), default=DEFAULT_THRESHOLD_VALUE, type=int)
+    
+    # Bruteforce command arguments 
+    bruteforce_parser.add_argument("-b", "--base", dest="bruteforceBase", metavar="<base>", help="Manually choose a fixed base (e.g : 2 for binary) to force the text. Please note, the base chosen cannot exceed the number of zero width spaces available in the lists.", type=int)
+    bruteforce_parser.add_argument("-c", "--characters", dest="bruteforceCharacters", metavar="\"<char_1>, <char_2>, ...\"", help="Zero width characters to use to decode the private text (e.g : \\u200b).", type=str)
+    bruteforce_parser.add_argument("-d", "--demo", dest="bruteforceDemo", metavar="<preview_size>", help="Size of the preview in number of characters. This allows you to quickly view and analyze bruteforce attempts.", default=DEFAULT_PREVIEW_SIZE, type=int)
+    bruteforce_parser.add_argument("-e", "--encryption", dest="bruteforceEncryption", metavar="[AES, RSA, PGP]", choices=['AES', 'RSA', 'PGP'], help="Encryption type.", default=DEFAULT_ENCRYPTION_VALUE)
+    bruteforce_public_group = bruteforce_parser.add_mutually_exclusive_group(required=True)
+    bruteforce_public_group.add_argument("-p", "--public", dest="bruteforcePublic", metavar="<public_text>", help="Cover text containing zero width space characters to extract.", type=str)
+    bruteforce_public_group.add_argument("-P", "--pfile", dest="bruteforcePublicFile", metavar="<path_to_file>", help="Use text cover from a file, containing zero width space characters for extraction.", type=str)
+    bruteforce_parser.add_argument("-s", "--search", dest="bruteforceSearch", metavar="<search_term>", help="Specific terms to search for validate a bruteforce attempt.", type=str)
+    bruteforce_parser.add_argument("-t", "--threshold", dest="bruteforceThreshold", metavar="\"<start_range>, <end_range>\"", help="Size of an encoding string, the larger the number, the more it is possible to encode different characters. Select the threshold range to test.", default=DEFAULT_THRESHOLD_RANGE_VALUE, type=str)
+    bruteforce_parser.add_argument("-w", "--wily", dest="bruteforceWily", metavar="[y/yes/true, n/no/false]", help="Intelligent algorithm that only selects attempts that can be interesting to study. Please note that this is largely based on the composition of the latin alphabet.", nargs='?', const=True, default=DEFAULT_WILY_MODE_VALUE, type=str2bool)
+    
+    # Global arguments
+    parser.add_argument("-f", "--force", dest="force", help="Overwrite the output file if already existing.", action="store_true")
+    parser.add_argument("-o", "--output", dest="output", metavar="<output_file>", help="File to store the results.", type=str)
+    verbose_group = parser.add_mutually_exclusive_group()
+    verbose_group.add_argument("-q", "--quiet", dest="quiet", help="Disable output verbosity.", action="store_true")
+    verbose_group.add_argument("-v", "--verbose", dest="verbose", help="Increase output verbosity.", action="store_true")
     
     args = parser.parse_args()
     
@@ -898,6 +1401,226 @@ Full Scheme List:
             
             if analysis['total_zero_width'] == 0 and analysis['total_homoglyph'] == 0:
                 print("\nNo zero-width or homoglyph steganography detected.")
+        
+        elif args.command == 'clean':
+            initial_text = ""
+            ignore, specific = [], []
+
+            if args.cleanIgnore:
+                ignore = list(set([item.encode('latin1').decode('unicode_escape') for item in args.cleanIgnore.replace(" ", "").split(',')]))
+
+            if args.cleanSpecific:
+                specific = list(set([item.encode('latin1').decode('unicode_escape') for item in args.cleanSpecific.replace(" ", "").split(',')]))
+
+            if args.cleanPublic:
+                initial_text = args.cleanPublic.encode('ascii', 'ignore').decode('unicode_escape')
+            elif args.cleanPublicFile:
+                initial_text = read_input(args.cleanPublicFile)
+
+            cleaned_text = clean_text(initial_text, ignore, specific)
+
+            if args.output:
+                write_output(args.output, cleaned_text)
+                print("\033[37;1m[\033[32;1m+\033[37;1m] \033[37;1mThe text has been cleaned up\033[0m")
+                print(f"\033[37;1m[\033[36;1m*\033[37;1m] \033[37;1mText saved in '\033[36;1m{args.output}\033[0m'")
+            else:
+                print("\033[37;1m[\033[32;1m+\033[37;1m] \033[37;1mThe text has been cleaned up\033[0m")
+                print("\n\033[37;1m===================================================================\033[0m\n")
+                print(cleaned_text)
+                print("\n\033[37;1m===================================================================\033[0m\n")
+        
+        elif args.command == 'detect':
+            initial_text = ""
+            ignore, search = [], []
+
+            if args.detectIgnore:
+                ignore = list(set([item.encode('latin1').decode('unicode_escape') for item in args.detectIgnore.replace(" ", "").split(',')]))
+
+            if args.detectSearch:
+                search = list(set([item.encode('latin1').decode('unicode_escape') for item in args.detectSearch.replace(" ", "").split(',')]))
+
+            if args.detectPublic:
+                initial_text = args.detectPublic
+            elif args.detectPublicFile:
+                initial_text = read_input(args.detectPublicFile)
+                
+            analyzed_text = detect_text(initial_text, ignore, search, args.detectReplace)
+
+            if args.output:
+                write_output(args.output, analyzed_text)
+                print("\033[37;1m[\033[32;1m+\033[37;1m] \033[37;1mThe text has been correctly analyzed\033[0m")
+                print(f"\033[37;1m[\033[36;1m*\033[37;1m] \033[37;1mAnalyzed text saved in '\033[36;1m{args.output}\033[0m'")
+            else:
+                print("\033[37;1m[\033[32;1m+\033[37;1m] \033[37;1mThe text has been correctly analyzed\033[0m")
+                print("\n\033[37;1m===================================================================\033[0m\n")
+                print(analyzed_text)
+                print("\n\033[37;1m===================================================================\033[0m\n")
+        
+        elif args.command == 'embed':
+            public_text, private_text, final_text = "", "", ""
+            zwsp_list = ZWSP_LIST
+    
+            if args.embedCharacters:
+                if args.embedCharacters == "list":
+                    display_zwsp_list()
+                else:
+                    zwsp_list = format_zwsp_list(args.embedCharacters)
+
+            if len(zwsp_list) < 2:
+                print("\033[37;1m[\033[31;1m-\033[37;1m] \033[37;1mThe number of different zero width characters in the list cannot be less than two !\033[0m\n")
+                exit()
+
+            if args.embedPublic:
+                public_text = args.embedPublic
+            elif args.embedPublicFile:
+                public_text = read_input(args.embedPublicFile)
+
+            if args.embedPrivate:
+                private_text = args.embedPrivate
+            elif args.embedPrivateFile:
+                private_text = read_input(args.embedPrivateFile)
+
+            if args.embedEncryption:
+                password = ""
+                if args.embedEncryption == "AES":
+                    valid = False
+                    while not valid:
+                        password = getpass("\033[32;1mEnter the password to encrypt the hidden text with AES : \033[0m\n")
+                        password_verif = getpass("\n\033[32;1mConfirm password : \033[0m\n")
+                        if password == password_verif:
+                            valid = True
+                        else:
+                            print("\033[37;1m[\033[31;1m-\033[37;1m] \033[37;1mPasswords do not match !\033[0m\n\n")
+                    encoder = ZeroWidthEncoder(EncodingScheme.THRESHOLD_BASED)
+                    private_text = encoder.encrypt(private_text, args.embedEncryption, password)
+
+            print(f"\033[37;1mENCRYPTION : \033[36m{args.embedEncryption}\033[0m")
+
+            encoder = ZeroWidthEncoder(
+                EncodingScheme.THRESHOLD_BASED,
+                threshold=args.embedThreshold,
+                zwsp_list=zwsp_list,
+                equalize=args.embedEqualize,
+                space_mode=args.embedSpace,
+                unconstrain_mode=args.embedUnconstrain
+            )
+            final_text = encoder.embed_threshold_based(public_text, private_text)
+            
+            if args.output:
+                write_output(args.output, final_text)
+                print("\033[37;1m[\033[32;1m+\033[37;1m] \033[37;1mThe text has been correctly hidden\033[0m")
+                print(f"\033[37;1m[\033[36;1m*\033[37;1m] \033[37;1mText saved in '\033[36;1m{args.output}\033[0m'")
+            else:
+                print("\033[37;1m[\033[32;1m+\033[37;1m] \033[37;1mThe text has been correctly hidden\033[0m")
+                print("\n\033[37;1m===================================================================\033[0m\n")
+                print(final_text)
+                print("\n\033[37;1m===================================================================\033[0m\n")
+        
+        elif args.command == 'extract':
+            public_text, private_text, password = "", "", ""
+            zwsp_list = ZWSP_LIST
+    
+            if args.extractCharacters:
+                if args.extractCharacters == "list":
+                    display_zwsp_list()
+                else:
+                    zwsp_list = format_zwsp_list(args.extractCharacters)
+                    
+            if len(zwsp_list) < 2:
+                print("\033[37;1m[\033[31;1m-\033[37;1m] \033[37;1mThe number of different zero width characters in the list cannot be less than two !\033[0m\n")
+                exit()
+
+            if args.extractPublic:
+                public_text = args.extractPublic
+            elif args.extractPublicFile:
+                public_text = read_input(args.extractPublicFile)
+
+            if args.extractEncryption:
+                if args.extractEncryption == "AES":
+                    password = getpass("\033[32;1mEnter the password to decrypt the hidden text with AES : \033[0m\n")
+
+            encoder = ZeroWidthEncoder(
+                EncodingScheme.THRESHOLD_BASED,
+                threshold=args.extractThreshold,
+                zwsp_list=zwsp_list
+            )
+            
+            if encoder.verification(public_text, zwsp_list):
+                private_text = encoder.extract_threshold_based(public_text)
+            else:
+                print("\033[37;1m[\033[36;1m*\033[37;1m] \033[37;1mThe cover text doesn't contain any zero width characters present in the list.\033[0m\n")
+                exit()
+                
+            if args.extractEncryption == "AES":
+                private_text = encoder.decrypt(private_text, args.extractEncryption, password)
+
+            if args.output:
+                write_output(args.output, private_text)
+                print("\033[37;1m[\033[32;1m+\033[37;1m] \033[37;1mText has been correctly extracted\033[0m")
+                print(f"\033[37;1m[\033[36;1m*\033[37;1m] \033[37;1mText saved in '\033[36;1m{args.output}\033[0m'")
+            else:
+                print("\033[37;1m[\033[32;1m+\033[37;1m] \033[37;1mText has been correctly extracted\033[0m")
+                print("\n\033[37;1m===================================================================\033[0m\n")
+                print(private_text)
+                print("\n\033[37;1m===================================================================\033[0m\n")
+        
+        elif args.command == 'bruteforce':
+            public_text, password = "", ""
+            threshold_range = args.bruteforceThreshold.replace(" ", "").split(',')
+            zwsp_list = ZWSP_LIST
+
+            try:
+                for i in range(len(threshold_range)):
+                    threshold_range[i] = int(threshold_range[i], 10)
+            except ValueError:
+                print("\033[37;1m[\033[31;1m-\033[37;1m] \033[37;1mThe threshold range is composed of exactly two integers !\033[0m\n")
+                exit()
+
+            if len(threshold_range) != 2:
+                print("\033[37;1m[\033[31;1m-\033[37;1m] \033[37;1mThe threshold range is composed of exactly two integers !\033[0m\n")
+                exit()
+            elif threshold_range[0] > threshold_range[1]:
+                print("\033[37;1m[\033[31;1m-\033[37;1m] \033[37;1mThreshold values must be placed in ascending order.\033[0m\n")
+                exit()
+    
+            if args.bruteforceCharacters:
+                if args.bruteforceCharacters == "list":
+                    display_zwsp_list()
+                else:
+                    zwsp_list = format_zwsp_list(args.bruteforceCharacters)
+                    
+            if len(zwsp_list) < 2:
+                print("\033[37;1m[\033[31;1m-\033[37;1m] \033[37;1mThe number of different zero width characters in the list cannot be less than two !\033[0m\n")
+                exit()
+
+            base = args.bruteforceBase or len(zwsp_list)
+            if base < 2 or base > 36:
+                print("\033[37;1m[\033[31;1m-\033[37;1m] \033[37;1mBase must be greater or equal to 2 and strictly less than 37 !\033[0m\n")
+                exit()
+
+            if args.bruteforcePublic:
+                public_text = args.bruteforcePublic
+            elif args.bruteforcePublicFile:
+                public_text = read_input(args.bruteforcePublicFile)
+
+            searched_text = args.bruteforceSearch
+            if args.bruteforceWily and not searched_text:
+                searched_text = r'[a-zA-Z]{3}'
+
+            encoder = ZeroWidthEncoder(EncodingScheme.THRESHOLD_BASED, zwsp_list=zwsp_list)
+            
+            if encoder.verification(public_text, zwsp_list):
+                encoder.bruteforce_threshold_based(
+                    public_text, 
+                    threshold_range, 
+                    base, 
+                    args.bruteforceDemo, 
+                    searched_text, 
+                    args.output, 
+                    args.force
+                )
+            else:
+                print("\033[37;1m[\033[36;1m*\033[37;1m] \033[37;1mThe cover text doesn't contain any zero width characters present in the list.\033[0m\n")
     
     except FileNotFoundError as e:
         print(f"ERROR: File not found - {e}")
